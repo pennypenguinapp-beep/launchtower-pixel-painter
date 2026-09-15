@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Pixel Painter — Tiny Pixel Art Editor</title>
+<style>
+  :root {
+    --bg: #14161c;
+    --panel: #1d2029;
+    --panel2: #232734;
+    --border: #2e3342;
+    --text: #d7dbe6;
+    --muted: #8a91a5;
+    --accent: #5b8cff;
+    --accent2: #7c5bff;
+    --good: #3ecf8e;
+    --bad: #ff5b6a;
+    --checker-a: #2a2e3a;
+    --checker-b: #232734;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 14px 12px 30px;
+  }
+  header { text-align: center; margin-bottom: 12px; }
+  header h1 {
+    margin: 0;
+    font-size: 22px;
+    letter-spacing: 0.5px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    font-weight: 700;
+  }
+  header p { margin: 4px 0 0; color: var(--muted); font-size: 12.5px; }
+  .wrap {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: flex-start;
+    width: 100%;
+    max-width: 980px;
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+  }
+  .canvas-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 14px;
+  }
+  #stage {
+    position: relative;
+    line-height: 0;
+    border-radius: 6px;
+    overflow: hidden;
+    background:
+      linear-gradient(45deg, var(--checker-a) 25%, transparent 25% 75%, var(--checker-b) 75%) 0 0 / 16px 16px,
+      linear-gradient(45deg, var(--checker-b) 25%, transparent 25% 75%, var(--checker-a) 75%) 8px 8px / 16px 16px;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.45);
+    touch-action: none;
+  }
+  #board { display: block; image-rendering: pixelated; cursor: crosshair; }
+  #grid {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    image-rendering: pixelated;
+  }
+  .side {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 300px;
+    max-width: 100%;
+  }
+  .group {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px;
+  }
+  .group h3 {
+    margin: 0 0 8px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    font-weight: 600;
+  }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  button, .btn {
+    background: #2a2f3e;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background .12s, border-color .12s, transform .05s;
+    user-select: none;
+    font-family: inherit;
+  }
+  button:hover { background: #333a4d; }
+  button:active { transform: translateY(1px); }
+  button.active {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #fff;
+    border-color: transparent;
+    box-shadow: 0 2px 10px rgba(91,140,255,0.35);
+  }
+  button.small { padding: 6px 8px; font-size: 12px; }
+  .tools { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .tools button { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 4px; font-size: 11px; }
+  .tools .ico { font-size: 17px; line-height: 1; }
+  .sizes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .sizes button { font-size: 13px; font-weight: 600; }
+  .zoomrow { justify-content: space-between; }
+  .zoomrow .val { color: var(--muted); font-size: 12px; min-width: 34px; text-align: right; }
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 4px; border-radius: 4px;
+    background: #333a4d; outline: none; margin: 8px 0 2px;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--accent); cursor: pointer;
+    border: 2px solid #fff2;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--accent); cursor: pointer; border: 2px solid #fff2;
+  }
+  .swatch {
+    width: 34px; height: 34px;
+    border-radius: 8px;
+    border: 2px solid #0006;
+    cursor: pointer;
+    position: relative;
+    flex-shrink: 0;
+  }
+  .swatch.sel { border-color: #fff; box-shadow: 0 0 0 2px var(--accent); }
+  .palette {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 5px;
+    margin-bottom: 8px;
+  }
+  .palette .swatch { width: 100%; height: 26px; border-radius: 5px; }
+  .colorrow { display: flex; gap: 8px; align-items: center; }
+  .colorrow input[type="color"] {
+    width: 44px; height: 34px; padding: 2px;
+    background: transparent; border: 1px solid var(--border);
+    border-radius: 8px; cursor: pointer;
+  }
+  .hex {
+    flex: 1;
+    background: #1a1d26;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-size: 13px;
+    letter-spacing: 0.5px;
+  }
+  .hex:focus { outline: none; border-color: var(--accent); }
+  .presetrow { gap: 6px; }
+  .presetrow select {
+    flex: 1;
+    background: #1a1d26;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px;
+    font-size: 13px;
+    font-family: inherit;
+  }
+  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .actions .wide { grid-column: span 2; }
+  .exportrow { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .status {
+    font-size: 11.5px;
+    color: var(--muted);
+    min-height: 16px;
+    text-align: center;
+    margin-top: 4px;
+  }
+  .status.ok { color: var(--good); }
+  .status.err { color: var(--bad); }
+  footer {
+    margin-top: 22px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  footer a { color: var(--accent); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+  .kbd {
+    display: inline-block;
+    background: #2a2f3e;
+    border: 1px solid var(--border);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-family: ui-monospace, monospace;
+    font-size: 10.5px;
+    color: var(--text);
+  }
+  .hint { font-size: 11px; color: var(--muted); margin-top: 8px; line-height: 1.6; }
+  @media (max-width: 720px) {
+    .side { width: 100%; }
+    .canvas-panel { order: -1; width: 100%; }
+    .tools { grid-template-columns: repeat(4, 1fr); }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Pixel Painter</h1>
+  <p>Tiny pixel-art editor — paint, fill, eyedrop, export. No account, no network.</p>
+</header>
+
+<div class="wrap">
+  <div class="panel canvas-panel">
+    <div id="stage">
+      <canvas id="board" width="32" height="32"></canvas>
+      <canvas id="grid" width="32" height="32"></canvas>
+    </div>
+    <div class="status" id="status">Ready — click a pixel to paint.</div>
+  </div>
+
+  <div class="side">
+    <div class="group">
+      <h3>Tools</h3>
+      <div class="tools">
+        <button id="t-pencil" class="active" data-tool="pencil"><span class="ico">✏️</span>Pencil</button>
+        <button id="t-fill" data-tool="fill"><span class="ico">🪣</span>Fill</button>
+        <button id="t-eraser" data-tool="eraser"><span class="ico">🧽</span>Erase</button>
+        <button id="t-drop" data-tool="drop"><span class="ico">💧</span>Dropper</button>
+      </div>
+      <div class="hint">
+        <span class="kbd">P</span> pencil &nbsp;<span class="kbd">F</span> fill &nbsp;<span class="kbd">E</span> eraser &nbsp;<span class="kbd">I</span> dropper<br>
+        <span class="kbd">Ctrl+Z</span> undo &nbsp;<span class="kbd">Ctrl+Y</span> redo &nbsp;<span class="kbd">[</span>/<span class="kbd">]</span> zoom
+      </div>
+    </div>
+
+    <div class="group">
+      <h3>Canvas size</h3>
+      <div class="sizes">
+        <button data-size="16">16×16</button>
+        <button data-size="32" class="active">32×32</button>
+        <button data-size="64">64×64</button>
+      </div>
+      <div class="hint">Changing size clears the canvas (undoable).</div>
+    </div>
+
+    <div class="group">
+      <h3>Color</h3>
+      <div class="colorrow" style="margin-bottom:10px">
+        <input type="color" id="colorPick" value="#5b8cff">
+        <input type="text" class="hex" id="hexInput" value="#5B8CFF" maxlength="7" spellcheck="false">
+      </div>
+      <div class="presetrow row" style="margin-bottom:10px">
+        <select id="presetSel">
+          <option value="">Load a preset palette…</option>
+          <option value="classic">Classic 32</option>
+          <option value="sunset">Sunset 16</option>
+          <option value="ocean">Ocean 16</option>
+          <option value="forest">Forest 16</option>
+          <option value="neon">Neon 16</option>
+          <option value="grayscale">Grayscale 8</option>
+        </select>
+        <button class="small" id="addColor">+ Add</button>
+      </div>
+      <div class="palette" id="palette"></div>
+    </div>
+
+    <div class="group">
+      <h3>Zoom</h3>
+      <div class="row zoomrow">
+        <button class="small" id="zoomOut">−</button>
+        <input type="range" id="zoom" min="4" max="24" step="2" value="12">
+        <button class="small" id="zoomIn">+</button>
+        <span class="val" id="zoomVal">12×</span>
+      </div>
+    </div>
+
+    <div class="group">
+      <h3>Canvas</h3>
+      <div class="actions">
+        <button id="undo">↶ Undo</button>
+        <button id="redo">↷ Redo</button>
+        <button id="clear">Clear</button>
+        <button id="random">🎲 Random</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <h3>Export PNG</h3>
+      <div class="exportrow">
+        <button id="export1">Download 1×</button>
+        <button id="export8">Download 8×</button>
+      </div>
+      <div class="hint">1× is the true pixel size (e.g. 32×32). 8× is a crisp nearest-neighbor upscale (e.g. 256×256).</div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  Made with <span style="color:var(--accent)">LaunchTower</span> ·
+  <a href="https://pennypenguinapp-beep.github.io/" target="_blank" rel="noopener">More free tools →</a>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------- state ----------
+  var SIZE = 32;
+  var ZOOM = 12;
+  var TOOL = "pencil";
+  var COLOR = "#5b8cff";
+  var palette = [];
+  var selIndex = 0;
+  var undoStack = [];
+  var redoStack = [];
+  var MAX_HISTORY = 60;
+  var drawing = false;
+  var lastCell = null;
+
+  // ---------- dom ----------
+  var board = document.getElementById("board");
+  var grid = document.getElementById("grid");
+  var stage = document.getElementById("stage");
+  var bctx = board.getContext("2d");
+  var gctx = grid.getContext("2d");
+  var statusEl = document.getElementById("status");
+  var colorPick = document.getElementById("colorPick");
+  var hexInput = document.getElementById("hexInput");
+  var presetSel = document.getElementById("presetSel");
+  var paletteEl = document.getElementById("palette");
+  var zoomSlider = document.getElementById("zoom");
+  var zoomVal = document.getElementById("zoomVal");
+
+  bctx.imageSmoothingEnabled = false;
+  gctx.imageSmoothingEnabled = false;
+
+  // ---------- presets ----------
+  var PRESETS = {
+    classic: [
+      "#000000","#1d2b53","#7e2553","#008751","#ab5236","#5f574f","#c2c3c7","#fff1e8",
+      "#ff004d","#ffa300","#ffec27","#00e436","#29adff","#83769c","#ff77a8","#ffccaa",
+      "#132238","#3b3b58","#7e2553","#008751","#ab5236","#5f574f","#c2c3c7","#fff1e8",
+      "#ff004d","#ffa300","#ffec27","#00e436","#29adff","#83769c","#ff77a8","#ffccaa"
+    ],
+    sunset: [
+      "#0b0620","#2a1a4a","#5b2a6e","#8e3a7a","#c2477e","#e05a6a","#f07a4a","#f79a3a",
+      "#ffb84a","#ffd25a","#ffe68a","#fff2b8","#2a1a4a","#5b2a6e","#8e3a7a","#c2477e"
+    ],
+    ocean: [
+      "#04121f","#0a2a44","#12456b","#1e6a99","#2e8fc0","#4fb3dd","#7fd4ee","#b3ecf7",
+      "#04121f","#0a2a44","#12456b","#1e6a99","#2e8fc0","#4fb3dd","#7fd4ee","#b3ecf7"
+    ],
+    forest: [
+      "#0a1a0d","#14301a","#1f4a26","#2f6a36","#4a8f4a","#6fb35f","#9fd47f","#d4f0a8",
+      "#0a1a0d","#14301a","#1f4a26","#2f6a36","#4a8f4a","#6fb35f","#9fd47f","#d4f0a8"
+    ],
+    neon: [
+      "#0a0014","#1a0033","#330066","#6600cc","#ff00ff","#00ffff","#ff0066","#ffff00",
+      "#0a0014","#1a0033","#330066","#6600cc","#ff00ff","#00ffff","#ff0066","#ffff00"
+    ],
+    grayscale: [
+      "#000000","#262626","#4c4c4c","#737373","#999999","#bfbfbf","#e5e5e5","#ffffff"
+    ]
+  };
+
+  // ---------- helpers ----------
+  function normHex(h) {
+    h = (h || "").trim().toLowerCase();
+    if (h[0] !== "#") h = "#" + h;
+    if (h.length === 4) {
+      h = "#" + h[1] + h[1] + h[2] + h[2] + h[3] + h[3];
+    }
+    return h;
+  }
+  function validHex(h) {
+    return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test((h || "").trim());
+  }
+  function status(msg, cls) {
+    statusEl.textContent = msg;
+    statusEl.className = "status" + (cls ? " " + cls : "");
+  }
+  function cellAt(ev) {
+    var r = board.getBoundingClientRect();
+    var x = Math.floor((ev.clientX - r.left) / r.width * SIZE);
+    var y = Math.floor((ev.clientY - r.top) / r.height * SIZE);
+    if (x < 0 || y < 0 || x >= SIZE || y >= SIZE) return null;
+    return { x: x, y: y };
+  }
+  function px(x, y) {
+    var d = bctx.getImageData(x, y, 1, 1).data;
+    return "rgba(" + d[0] + "," + d[1] + "," + d[2] + "," + d[3] + ")";
+  }
+  function setPx(x, y, color) {
+    bctx.fillStyle = color;
+    bctx.fillRect(x, y, 1, 1);
+  }
+  function snapshot() {
+    return bctx.getImageData(0, 0, SIZE, SIZE);
+  }
+  function restore(img) {
+    bctx.putImageData(img, 0, 0);
+  }
+  function pushUndo() {
+    undoStack.push(snapshot());
+    if (undoStack.length > MAX_HISTORY) undoStack.shift();
+    redoStack.length = 0;
+  }
+  function undo() {
+    if (!undoStack.length) { status("Nothing to undo."); return; }
+    redoStack.push(snapshot());
+    restore(undoStack.pop());
+    status("Undone.");
+  }
+  function redo() {
+    if (!redoStack.length) { status("Nothing to redo."); return; }
+    undoStack.push(snapshot());
+    restore(redoStack.pop());
+    status("Redone.");
+  }
+
+  // ---------- flood fill (BFS, no recursion) ----------
+  function floodFill(sx, sy, fill) {
+    var target = px(sx, sy);
+    if (target === fill) return 0;
+    var stack = [[sx, sy]];
+    var seen = {};
+    var count = 0;
+    while (stack.length) {
+      var c = stack.pop();
+      var x = c[0], y = c[1];
+      var key = x + "," + y;
+      if (seen[key]) continue;
+      seen[key] = true;
+      if (x < 0 || y < 0 || x >= SIZE || y >= SIZE) continue;
+      if (px(x, y) !== target) continue;
+      setPx(x, y, fill);
+      count++;
+      stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+    }
+    return count;
+  }
+
+  // ---------- tools ----------
+  function applyTool(cell) {
+    if (!cell) return;
+    if (TOOL === "pencil") {
+      setPx(cell.x, cell.y, COLOR);
+    } else if (TOOL === "eraser") {
+      bctx.clearRect(cell.x, cell.y, 1, 1);
+    } else if (TOOL === "fill") {
+      var n = floodFill(cell.x, cell.y, COLOR);
+      status("Filled " + n + " pixel" + (n === 1 ? "" : "s") + ".", "ok");
+    } else if (TOOL === "drop") {
+      var c = px(cell.x, cell.y);
+      if (c === "rgba(0,0,0,0)") { status("Dropped transparent pixel."); return; }
+      var m = c.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+      if (m) {
+        var hex = "#" + [m[1], m[2], m[3]].map(function (v) {
+          return ("0" + parseInt(v, 10).toString(16)).slice(-2);
+        }).join("");
+        setColor(hex);
+        status("Dropped " + hex.toUpperCase() + " — now the active color.", "ok");
+      }
+    }
+  }
+
+  // ---------- pointer events ----------
+  function onDown(ev) {
+    ev.preventDefault();
+    var cell = cellAt(ev);
+    if (!cell) return;
+    if (TOOL === "fill") {
+      pushUndo();
+      applyTool(cell);
+      return;
+    }
+    if (TOOL === "drop") {
+      applyTool(cell);
+      return;
+    }
+    pushUndo();
+    drawing = true;
+    lastCell = cell;
+    applyTool(cell);
+  }
+  function onMove(ev) {
+    if (!drawing) return;
+    ev.preventDefault();
+    var cell = cellAt(ev);
+    if (!cell) return;
+    if (lastCell && (cell.x !== lastCell.x || cell.y !== lastCell.y)) {
+      applyTool(cell);
+      lastCell = cell;
+    }
+  }
+  function onUp() { drawing = false; lastCell = null; }
+
+  board.addEventListener("mousedown", onDown);
+  board.addEventListener("mousemove", onMove);
+  window.addEventListener("mouseup", onUp);
+  board.addEventListener("touchstart", onDown, { passive: false });
+  board.addEventListener("touchmove", onMove, { passive: false });
+  board.addEventListener("touchend", onUp);
+  board.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+
+  // ---------- tools UI ----------
+  var toolBtns = document.querySelectorAll("[data-tool]");
+  toolBtns.forEach(function (b) {
+    b.addEventListener("click", function () {
+      TOOL = b.getAttribute("data-tool");
+      toolBtns.forEach(function (x) { x.classList.remove("active"); });
+      b.classList.add("active");
+      status("Tool: " + b.textContent.trim());
+    });
+  });
+
+  // ---------- sizes ----------
+  var sizeBtns = document.querySelectorAll("[data-size]");
+  sizeBtns.forEach(function (b) {
+    b.addEventListener("click", function () {
+      var s = parseInt(b.getAttribute("data-size"), 10);
+      if (s === SIZE) return;
+      pushUndo();
+      SIZE = s;
+      board.width = SIZE; board.height = SIZE;
+      grid.width = SIZE; grid.height = SIZE;
+      bctx.imageSmoothingEnabled = false;
+      gctx.imageSmoothingEnabled = false;
+      bctx.clearRect(0, 0, SIZE, SIZE);
+      sizeBtns.forEach(function (x) { x.classList.remove("active"); });
+      b.classList.add("active");
+      applyZoom();
+      status("Canvas set to " + SIZE + "×" + SIZE + ".");
+    });
+  });
+
+  // ---------- color ----------
+  function setColor(hex, fromPalette) {
+    COLOR = normHex(hex).toUpperCase();
+    colorPick.value = COLOR;
+    hexInput.value = COLOR;
+    if (fromPalette) {
+      var kids = paletteEl.children;
+      for (var i = 0; i < kids.length; i++) {
+        kids[i].classList.toggle("sel", i === selIndex);
+      }
+    }
+  }
+  colorPick.addEventListener("input", function () { setColor(colorPick.value); });
+  hexInput.addEventListener("input", function () {
+    var v = hexInput.value;
+    if (validHex(v)) setColor(v);
+  });
+  hexInput.addEventListener("blur", function () {
+    if (!validHex(hexInput.value)) hexInput.value = COLOR;
+  });
+
+  function renderPalette() {
+    paletteEl.innerHTML = "";
+    palette.forEach(function (c, i) {
+      var d = document.createElement("div");
+      d.className = "swatch" + (i === selIndex ? " sel" : "");
+      d.style.background = c;
+      d.title = c.toUpperCase();
+      d.addEventListener("click", function () {
+        selIndex = i;
+        setColor(c, true);
+      });
+      paletteEl.appendChild(d);
+    });
+  }
+
+  presetSel.addEventListener("change", function () {
+    var p = PRESETS[presetSel.value];
+    if (!p) return;
+    palette = p.slice();
+    selIndex = 0;
+    setColor(palette[0], true);
+    renderPalette();
+    status("Loaded " + presetSel.options[presetSel.selectedIndex].text + ".");
+    presetSel.value = "";
+  });
+
+  document.getElementById("addColor").addEventListener("click", function () {
+    if (!validHex(hexInput.value)) { status("Enter a valid hex first.", "err"); return; }
+    palette.push(normHex(hexInput.value).toUpperCase());
+    selIndex = palette.length - 1;
+    setColor(palette[selIndex], true);
+    renderPalette();
+    status("Added " + COLOR + " to palette.", "ok");
+  });
+
+  // ---------- zoom ----------
+  function applyZoom() {
+    var px = SIZE * ZOOM;
+    board.style.width = px + "px";
+    board.style.height = px + "px";
+    grid.style.width = px + "px";
+    grid.style.height = px + "px";
+    zoomVal.textContent = ZOOM + "×";
+    drawGrid();
+  }
+  function drawGrid() {
+    gctx.clearRect(0, 0, SIZE, SIZE);
+    gctx.strokeStyle = "rgba(255,255,255,0.10)";
+    gctx.lineWidth = 1 / ZOOM;
+    gctx.beginPath();
+    for (var i = 0; i <= SIZE; i++) {
+      gctx.moveTo(i, 0); gctx.lineTo(i, SIZE);
+      gctx.moveTo(0, i); gctx.lineTo(SIZE, i);
+    }
+    gctx.stroke();
+  }
+  zoomSlider.addEventListener("input", function () {
+    ZOOM = parseInt(zoomSlider.value, 10);
+    applyZoom();
+  });
+  document.getElementById("zoomIn").addEventListener("click", function () {
+    ZOOM = Math.min(24, ZOOM + 2); zoomSlider.value = ZOOM; applyZoom();
+  });
+  document.getElementById("zoomOut").addEventListener("click", function () {
+    ZOOM = Math.max(4, ZOOM - 2); zoomSlider.value = ZOOM; applyZoom();
+  });
+
+  // ---------- canvas actions ----------
+  document.getElementById("undo").addEventListener("click", undo);
+  document.getElementById("redo").addEventListener("click", redo);
+  document.getElementById("clear").addEventListener("click", function () {
+    pushUndo();
+    bctx.clearRect(0, 0, SIZE, SIZE);
+    status("Canvas cleared.", "ok");
+  });
+  document.getElementById("random").addEventListener("click", function () {
+    pushUndo();
+    bctx.clearRect(0, 0, SIZE, SIZE);
+    for (var i = 0; i < SIZE * SIZE * 0.35; i++) {
+      var x = (Math.random() * SIZE) | 0;
+      var y = (Math.random() * SIZE) | 0;
+      var c = palette[(Math.random() * palette.length) | 0] || COLOR;
+      setPx(x, y, c);
+    }
+    status("Scattered random pixels — paint over them!", "ok");
+  });
+
+  // ---------- export ----------
+  function exportPNG(scale) {
+    var out = document.createElement("canvas");
+    out.width = SIZE * scale;
+    out.height = SIZE * scale;
+    var octx = out.getContext("2d");
+    octx.imageSmoothingEnabled = false;
+    octx.drawImage(board, 0, 0, SIZE * scale, SIZE * scale);
+    var a = document.createElement("a");
+    a.download = "pixel-painter-" + SIZE + "x" + SIZE + (scale > 1 ? "-" + scale + "x" : "") + ".png";
+    a.href = out.toDataURL("image/png");
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    status("Exported " + (SIZE * scale) + "×" + (SIZE * scale) + " PNG.", "ok");
+  }
+  document.getElementById("export1").addEventListener("click", function () { exportPNG(1); });
+  document.getElementById("export8").addEventListener("click", function () { exportPNG(8); });
+
+  // ---------- keyboard ----------
+  window.addEventListener("keydown", function (e) {
+    if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "SELECT" || e.target.tagName === "TEXTAREA")) return;
+    var k = e.key.toLowerCase();
+    if ((e.ctrlKey || e.metaKey) && k === "z") { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
+    if ((e.ctrlKey || e.metaKey) && k === "y") { e.preventDefault(); redo(); return; }
+    if (k === "p") document.getElementById("t-pencil").click();
+    else if (k === "f") document.getElementById("t-fill").click();
+    else if (k === "e") document.getElementById("t-eraser").click();
+    else if (k === "i") document.getElementById("t-drop").click();
+    else if (k === "[") { ZOOM = Math.max(4, ZOOM - 2); zoomSlider.value = ZOOM; applyZoom(); }
+    else if (k === "]") { ZOOM = Math.min(24, ZOOM + 2); zoomSlider.value = ZOOM; applyZoom(); }
+  });
+
+  // ---------- init ----------
+  palette = PRESETS.classic.slice(0, 16);
+  selIndex = 0;
+  setColor(palette[0], true);
+  renderPalette();
+  applyZoom();
+})();
+</script>
+</body>
+</html>
